@@ -1,0 +1,963 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Convert Demand Monthly</title>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+
+<style>
+  :root{
+    --green:#4caf50;
+    --green-dark:#3d9b42;
+    --teal:#00695c;
+    --text:#1f2937;
+    --muted:#687386;
+    --line:#cfd8d8;
+    --line-soft:#dde5e5;
+    --planned:#fff08a;
+    --gap-neg:#ffd0cc;
+    --gap-neg-text:#a31515;
+    --bg:#ffffff;
+  }
+
+  *{box-sizing:border-box}
+
+  html,body{margin:0;padding:0;background:var(--bg);color:var(--text)}
+  body{font-family:"Segoe UI",Arial,sans-serif;min-height:100vh}
+
+  .topbar{
+    width:100%;
+    background:var(--green);
+    color:#fff;
+    min-height:104px;
+    display:flex;
+    align-items:center;
+    padding:0 26px;
+    box-shadow:0 2px 4px rgba(0,0,0,.16);
+    border-bottom:1px solid #2f8b35;
+  }
+
+  .topbar h1{
+    margin:0;
+    font-size:33px;
+    line-height:1;
+    font-weight:700;
+    letter-spacing:-.7px;
+    text-transform:uppercase;
+  }
+
+  .page{
+    width:100%;
+    padding:58px 26px 40px;
+  }
+
+  .content{
+    max-width:1365px;
+    margin:0 auto;
+  }
+
+  .control-row{
+    display:grid;
+    grid-template-columns:minmax(430px,480px) 95px 2px 230px;
+    align-items:center;
+    justify-content:center;
+    column-gap:28px;
+    min-height:160px;
+  }
+
+  .drop{
+    width:100%;
+    min-height:150px;
+    border:1px solid #b8c4c4;
+    background:#fff;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    text-align:center;
+    padding:22px 26px;
+    cursor:pointer;
+    transition:border-color .18s ease, background .18s ease, box-shadow .18s ease;
+  }
+
+  .drop:hover,
+  .drop.drag{
+    border-color:var(--green);
+    background:#fbfffb;
+    box-shadow:0 0 0 2px rgba(76,175,80,.08);
+  }
+
+  .drop strong{
+    display:block;
+    color:#111827;
+    font-size:18px;
+    line-height:1.35;
+    margin-bottom:8px;
+    font-weight:700;
+  }
+
+  .drop .support{
+    color:#4b5563;
+    font-size:13px;
+    line-height:1.45;
+  }
+
+  input[type=file]{display:none}
+
+  .arrow{
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    color:var(--teal);
+    font-size:54px;
+    font-weight:300;
+    line-height:1;
+    user-select:none;
+    transform:translateY(-2px);
+  }
+
+  .divider{
+    width:2px;
+    height:96px;
+    background:#d8e8ff;
+    justify-self:center;
+  }
+
+  .download-wrap{
+    display:flex;
+    align-items:center;
+    justify-content:center;
+  }
+
+  button{
+    border:0;
+    font-family:inherit;
+  }
+
+  .primary{
+    min-width:198px;
+    height:60px;
+    border-radius:9px;
+    background:var(--green);
+    color:#fff;
+    font-size:17px;
+    font-weight:700;
+    box-shadow:0 4px 8px rgba(0,0,0,.16);
+    cursor:pointer;
+    transition:background .15s ease, transform .15s ease, box-shadow .15s ease;
+  }
+
+  .primary:hover:not(:disabled){
+    background:var(--green-dark);
+    transform:translateY(-1px);
+    box-shadow:0 6px 12px rgba(0,0,0,.18);
+  }
+
+  .primary:disabled{
+    opacity:.55;
+    cursor:not-allowed;
+    box-shadow:none;
+  }
+
+  .status{
+    margin:14px auto 0;
+    max-width:860px;
+    min-height:20px;
+    text-align:center;
+    color:var(--muted);
+    font-size:13px;
+  }
+
+  .status.ok{color:#2e7d32}
+  .status.err{color:#b42318;font-weight:600}
+
+  .hidden-options{
+    display:none !important;
+  }
+
+  .summary{
+    display:none;
+  }
+
+  .review{
+    margin-top:48px;
+  }
+
+  .toolbar{
+    display:flex;
+    align-items:center;
+    justify-content:flex-start;
+    margin-bottom:17px;
+  }
+
+  .search{
+    width:276px;
+    height:42px;
+    border:1px solid #b7c6c6;
+    border-radius:5px;
+    background:#fff;
+    padding:0 13px;
+    color:var(--text);
+    font-family:inherit;
+    font-size:14px;
+    outline:none;
+    box-shadow:inset 0 0 0 1px rgba(0,0,0,.01);
+  }
+
+  .search:focus{
+    border-color:#89aa9f;
+    box-shadow:0 0 0 2px rgba(0,105,92,.08);
+  }
+
+  .search::placeholder{color:#667085}
+
+  .tablebox{
+    width:100%;
+    overflow:auto;
+    max-height:630px;
+    border:1px solid #b7c6c6;
+    background:#fff;
+  }
+
+  table{
+    border-collapse:collapse;
+    width:max-content;
+    min-width:100%;
+    font-size:14px;
+    background:#fff;
+  }
+
+  th,td{
+    border-right:1px solid #b7c6c6;
+    border-bottom:1px solid #b7c6c6;
+    padding:10px 10px;
+    white-space:nowrap;
+    height:40px;
+  }
+
+  th:last-child,td:last-child{border-right:0}
+
+  th{
+    position:sticky;
+    top:0;
+    z-index:2;
+    background:var(--green);
+    color:#fff;
+    font-weight:700;
+    letter-spacing:.2px;
+    text-align:right;
+  }
+
+  th:first-child,
+  th:nth-child(2),
+  th:nth-child(3){
+    text-align:left;
+  }
+
+  td{
+    text-align:right;
+    color:#263238;
+    background:#fff;
+  }
+
+  td:first-child,
+  td:nth-child(2),
+  td:nth-child(3){
+    text-align:left;
+  }
+
+  tr:hover td{
+    filter:brightness(.995);
+  }
+
+  tr.shortage-row td{
+    background:var(--planned)!important;
+    font-weight:400;
+  }
+
+  tr.shortage-row td:nth-child(3){
+    font-weight:700;
+  }
+
+  tr.gap-row td{
+    font-weight:700;
+  }
+
+  tr.gap-row td.gap-negative{
+    background:var(--gap-neg)!important;
+    color:var(--gap-neg-text);
+    font-weight:700;
+  }
+
+  .note{display:none}
+
+  @media (max-width:980px){
+    .topbar{min-height:84px;padding:0 18px}
+    .topbar h1{font-size:28px}
+    .page{padding:34px 18px}
+    .control-row{
+      grid-template-columns:1fr;
+      gap:18px;
+      min-height:auto;
+    }
+    .drop{min-height:135px}
+    .arrow{transform:rotate(90deg);font-size:44px}
+    .divider{display:none}
+    .review{margin-top:34px}
+    .search{width:100%}
+  }
+</style>
+
+</head>
+
+<body>
+  <header class="topbar">
+    <h1>Convert Demand Monthly</h1>
+  </header>
+
+  <main class="page">
+    <div class="content">
+      <section class="control-row">
+        <label class="drop" id="dropZone">
+          <input id="fileInput" type="file" accept=".csv,.xlsx,.xlsb,.xls,.xlsm" />
+          <div>
+            <strong>Drop CSV / XLSX / XLSB here or click to browse</strong>
+            <div class="support">Supported: CSV, XLSX, XLSB, XLS, XLSM · Expected columns: LD Part,<br>Stock-0007, Type, and timeline date columns</div>
+          </div>
+        </label>
+
+        <div class="arrow" aria-hidden="true">→</div>
+        <div class="divider" aria-hidden="true"></div>
+
+        <div class="download-wrap">
+          <button id="downloadExcelBtn" class="primary" disabled>Download Excel</button>
+        </div>
+      </section>
+
+      <div id="status" class="status">Waiting for file…</div>
+
+      <div class="hidden-options" aria-hidden="true">
+        <input type="checkbox" id="includeShortage" checked />
+        <input type="checkbox" id="fillMissing" />
+        <input type="checkbox" id="sortParts" checked />
+      </div>
+
+      <div id="summary" class="summary"></div>
+
+      <section class="review">
+        <div class="toolbar">
+          <input id="searchBox" class="search" placeholder="Search LD Part..." />
+        </div>
+
+        <div class="tablebox">
+          <table id="previewTable">
+            <thead></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+
+        <div class="note">Preview shows up to 400 rows.</div>
+      </section>
+    </div>
+  </main>
+
+<script>
+(() => {
+  const TYPE_DEMAND = "01 Demand";
+  const TYPE_FCST = "01 Demand FCST-XYS";
+  const TYPE_SUPPLY = "02 Supply";
+  const COMBINED_TYPE = "01 Demand+01 Demand FCST-XYS";
+  const SHORTAGE_TYPE = "Planned Order";
+  const EXPORT_MASTER_HEADERS = [
+    "LD Part", "Stock-0007", "Correct PG", "MM PG",
+    "MPN", "MFG", "MFG Name",
+    "FFFC", "Prefer Vendor", "Vendor Name", "PDT in PIR",
+    "ROP", "ROP demand after stock", "Type"
+  ];
+
+  const fileInput = document.getElementById("fileInput");
+  const dropZone = document.getElementById("dropZone");
+  const statusEl = document.getElementById("status");
+  const includeShortage = document.getElementById("includeShortage");
+  const fillMissing = document.getElementById("fillMissing");
+  const sortParts = document.getElementById("sortParts");
+  const downloadExcelBtn = document.getElementById("downloadExcelBtn");
+  const searchBox = document.getElementById("searchBox");
+  const summary = document.getElementById("summary");
+
+  let sourceMatrix = null;
+  let sourceName = "Monthly_Demand_FCST";
+  let resultRows = [];
+  let resultHeaders = [];
+
+  fileInput.addEventListener("change", e => {
+    const file = e.target.files[0];
+    if (file) loadFile(file);
+  });
+
+  ["dragenter","dragover"].forEach(evt => dropZone.addEventListener(evt, e => {
+    e.preventDefault();
+    dropZone.classList.add("drag");
+  }));
+  ["dragleave","drop"].forEach(evt => dropZone.addEventListener(evt, e => {
+    e.preventDefault();
+    dropZone.classList.remove("drag");
+  }));
+  dropZone.addEventListener("drop", e => {
+    const file = e.dataTransfer.files[0];
+    if (file) loadFile(file);
+  });
+
+  [includeShortage, fillMissing, sortParts].forEach(el => el.addEventListener("change", () => {
+    if (sourceMatrix) processMatrix(sourceMatrix);
+  }));
+
+  searchBox.addEventListener("input", renderPreview);
+  downloadExcelBtn.addEventListener("click", downloadCombinedXLSX);
+
+  function setStatus(msg, kind="") {
+    statusEl.className = "status" + (kind ? " " + kind : "");
+    statusEl.textContent = msg;
+  }
+
+  async function loadFile(file) {
+    try {
+      sourceName = file.name.replace(/\.[^.]+$/, "");
+      const ext = (file.name.split(".").pop() || "").toLowerCase();
+      const supported = new Set(["csv","xlsx","xlsb","xls","xlsm"]);
+
+      if (!supported.has(ext)) {
+        throw new Error("Unsupported file type. Please use CSV, XLSX, XLSB, XLS, or XLSM.");
+      }
+
+      setStatus(`Reading ${ext.toUpperCase()} file…`);
+
+      let matrix;
+      if (ext === "csv") {
+        const text = await file.text();
+        matrix = parseCSV(text);
+      } else {
+        if (typeof XLSX === "undefined") {
+          throw new Error("Excel reader could not load. Please connect to the internet, reload this HTML, or use CSV.");
+        }
+
+        const buf = await file.arrayBuffer();
+
+        // SheetJS full build supports XLSX / XLSB / XLS / XLSM.
+        // raw:true keeps Excel serial date headers intact; headerToMonth()
+        // below converts both serial dates and normal text dates to YYYYMM.
+        const wb = XLSX.read(buf, {
+          type: "array",
+          cellDates: false,
+          cellText: true,
+          cellNF: true
+        });
+
+        if (!wb.SheetNames || !wb.SheetNames.length) {
+          throw new Error("No worksheet was found in the Excel file.");
+        }
+
+        const ws = wb.Sheets[wb.SheetNames[0]];
+        matrix = XLSX.utils.sheet_to_json(ws, {
+          header: 1,
+          defval: "",
+          raw: true,
+          blankrows: true
+        });
+      }
+
+      sourceMatrix = matrix;
+      processMatrix(matrix);
+    } catch (err) {
+      console.error(err);
+      setStatus(err.message || String(err), "err");
+      resultRows = [];
+      resultHeaders = [];
+      downloadExcelBtn.disabled = true;
+      renderPreview();
+    }
+  }
+
+  function processMatrix(matrix) {
+    try {
+      if (!matrix || !matrix.length) throw new Error("File is empty.");
+
+      const headerRowIndex = findHeaderRow(matrix);
+      if (headerRowIndex < 0) throw new Error('Could not find header row containing "LD Part" and "Type".');
+
+      const rawHeaders = matrix[headerRowIndex] || [];
+      const headers = rawHeaders.map(v => String(v ?? "").trim());
+      const idxPart = findHeaderIndex(headers, ["LD Part","LDPart","Material"]);
+      const idxStock = findHeaderIndex(headers, ["Stock-0007","Stock 0007","Stock"]);
+      const idxType = findHeaderIndex(headers, ["Type"]);
+      const idxCorrectPG = findHeaderIndex(headers, ["Correct PG","CorrectPG"]);
+      const idxMMPG = findHeaderIndex(headers, ["MM PG","MMPG"]);
+      const idxMPN = findHeaderIndex(headers, ["MPN","Manufacturer Part Number","Mfr Part Number","Mfr. Part No.","Part Number"]);
+      const idxMFG = findHeaderIndex(headers, ["MFG","Manufacturer","Mfr","MFG Code","Manufacturer Code"]);
+      const idxMFGName = findHeaderIndex(headers, ["MFG Name","Manufacturer Name","Mfr Name","MFGName"]);
+      const idxFFFC = findHeaderIndex(headers, ["FFFC"]);
+      const idxPreferVendor = findHeaderIndex(headers, ["Prefer Vendor","Preferred Vendor","PreferVendor"]);
+      const idxVendorName = findHeaderIndex(headers, ["Vendor Name","VendorName"]);
+      const idxPDT = findHeaderIndex(headers, ["PDT in PIR","PDT PIR","PDT"]);
+      const idxROP = findHeaderIndex(headers, ["ROP"]);
+
+      if (idxPart < 0 || idxType < 0 || idxStock < 0) {
+        throw new Error('Required columns not found: "LD Part", "Stock-0007", "Type".');
+      }
+
+      const timeline = [];
+      rawHeaders.forEach((rawHeader, i) => {
+        const month = headerToMonth(rawHeader);
+        if (month) timeline.push({index:i, header:headers[i], month});
+      });
+      if (!timeline.length) throw new Error("No timeline date columns were detected.");
+
+      const grouped = new Map();
+
+      for (let r = headerRowIndex + 1; r < matrix.length; r++) {
+        const row = matrix[r] || [];
+        const part = String(row[idxPart] ?? "").trim();
+        const type = normalizeSpaces(row[idxType]);
+        if (!part) continue;
+        if (type !== TYPE_DEMAND && type !== TYPE_FCST && type !== TYPE_SUPPLY) continue;
+
+        if (!grouped.has(part)) {
+          grouped.set(part, {
+            part,
+            stock: parseNumber(row[idxStock]),
+            meta: {
+              "Correct PG": cellValue(row, idxCorrectPG),
+              "MM PG": cellValue(row, idxMMPG),
+              "MPN": cellValue(row, idxMPN),
+              "MFG": cellValue(row, idxMFG),
+              "MFG Name": cellValue(row, idxMFGName),
+              "FFFC": cellValue(row, idxFFFC),
+              "Prefer Vendor": cellValue(row, idxPreferVendor),
+              "Vendor Name": cellValue(row, idxVendorName),
+              "PDT in PIR": cellValue(row, idxPDT),
+              "ROP": cellValue(row, idxROP)
+            },
+            demandMonths: {},
+            supplyMonths: {}
+          });
+        }
+        const item = grouped.get(part);
+
+        // Keep Stock-0007 only as a reference value.
+        if ((!Number.isFinite(item.stock) || item.stock === 0) && row[idxStock] !== "") {
+          item.stock = parseNumber(row[idxStock]);
+        }
+
+        // Fill requested export master-data fields from the first non-blank value found for each LD Part.
+        const metaSources = [
+          ["Correct PG", idxCorrectPG], ["MM PG", idxMMPG],
+          ["MPN", idxMPN], ["MFG", idxMFG], ["MFG Name", idxMFGName],
+          ["FFFC", idxFFFC],
+          ["Prefer Vendor", idxPreferVendor], ["Vendor Name", idxVendorName], ["PDT in PIR", idxPDT],
+          ["ROP", idxROP]
+        ];
+        for (const [key, idx] of metaSources) {
+          if (isBlank(item.meta[key])) {
+            const v = cellValue(row, idx);
+            if (!isBlank(v)) item.meta[key] = v;
+          }
+        }
+
+        for (const t of timeline) {
+          const val = parseNumber(row[t.index]);
+          if (type === TYPE_SUPPLY) {
+            item.supplyMonths[t.month] = (item.supplyMonths[t.month] || 0) + val;
+          } else {
+            item.demandMonths[t.month] = (item.demandMonths[t.month] || 0) + val;
+          }
+        }
+      }
+
+      let monthList = [...new Set(timeline.map(x => x.month))].sort();
+      if (fillMissing.checked && monthList.length) monthList = continuousMonths(monthList[0], monthList[monthList.length - 1]);
+
+      let items = [...grouped.values()];
+      if (sortParts.checked) items.sort((a,b) => a.part.localeCompare(b.part, undefined, {numeric:true, sensitivity:"base"}));
+
+      resultHeaders = ["LD Part","Stock-0007","Type", ...monthList];
+      resultRows = [];
+
+      for (const item of items) {
+        const mainRow = {
+          "LD Part": item.part,
+          "Stock-0007": normalizeNumber(item.stock),
+          "Type": COMBINED_TYPE,
+          "__rowClass": ""
+        };
+        for (const m of monthList) mainRow[m] = normalizeNumber(item.demandMonths[m] || 0);
+        resultRows.push(mainRow);
+
+        if (includeShortage.checked) {
+          let availableStock = Math.max(0, normalizeNumber(item.stock));
+          const plannedRow = {
+            "LD Part": item.part,
+            "Stock-0007": "",
+            "Type": SHORTAGE_TYPE,
+            "__rowClass": "shortage-row",
+            "__stockExport": normalizeNumber(item.stock),
+            "__meta": item.meta
+          };
+
+          for (const m of monthList) {
+            const currentDemand = Math.max(0, normalizeNumber(item.demandMonths[m] || 0));
+
+            // Planned Order = current month demand that remaining Stock-0007 cannot cover.
+            // Example IN60000011133:
+            // 57,299 - 57,074 = 225 stock remaining
+            // 27,818 - 225 = 27,593 Planned Order
+            plannedRow[m] = normalizeNumber(Math.max(0, currentDemand - availableStock));
+
+            availableStock = normalizeNumber(Math.max(0, availableStock - currentDemand));
+          }
+          resultRows.push(plannedRow);
+        }
+
+        // Supply is independent: monthly sum of 02 Supply only.
+        // Stock-0007 is NOT deducted from Supply.
+        const supplyRow = {
+          "LD Part": item.part,
+          "Stock-0007": normalizeNumber(item.stock),
+          "Type": TYPE_SUPPLY,
+          "__rowClass": "",
+          "__stockExport": normalizeNumber(item.stock),
+          "__meta": item.meta
+        };
+        for (const m of monthList) supplyRow[m] = normalizeNumber(item.supplyMonths[m] || 0);
+        resultRows.push(supplyRow);
+
+        // Gap running balance:
+        // First month = Stock-0007 - Demand+FCST + Supply
+        // Following month = Previous Gap - Demand+FCST + Supply
+        let runningGap = item.stock;
+        const gapRow = {
+          "LD Part": "",
+          "Stock-0007": "",
+          "Type": "Gap",
+          "__rowClass": "gap-row",
+          "__partSearch": item.part
+        };
+
+        for (const m of monthList) {
+          const currentDemand = normalizeNumber(item.demandMonths[m] || 0);
+          const currentSupply = normalizeNumber(item.supplyMonths[m] || 0);
+          runningGap = normalizeNumber(runningGap - currentDemand + currentSupply);
+          gapRow[m] = runningGap;
+        }
+        resultRows.push(gapRow);
+      }
+
+      renderSummary(headerRowIndex, timeline, items.length, monthList.length, resultRows.length);
+      renderPreview();
+      const hasPlanned = resultRows.some(r => r["Type"] === SHORTAGE_TYPE);
+      const hasSupply = resultRows.some(r => r["Type"] === TYPE_SUPPLY);
+      downloadExcelBtn.disabled = !(hasPlanned && hasSupply);
+      setStatus(`Done. ${items.length.toLocaleString()} LD Parts processed. ${includeShortage.checked ? "Download Excel is ready: Planned Order + 02 Supply, with LD Part / Stock / PG / MPN / MFG / MFG Name / FFFC / vendor / PDT / ROP / ROP demand after stock columns and monthly YYYYMM columns. ROP demand after stock is exported as value only." : "Enable Create Planned Order row to use the combined Excel export."}`, "ok");
+    } catch (err) {
+      console.error(err);
+      setStatus(err.message || String(err), "err");
+      resultRows = [];
+      resultHeaders = [];
+      downloadExcelBtn.disabled = true;
+      renderPreview();
+    }
+  }
+
+  function findHeaderRow(matrix) {
+    const max = Math.min(matrix.length, 30);
+    for (let r = 0; r < max; r++) {
+      const values = (matrix[r] || []).map(v => normalizeKey(v));
+      if (values.includes("ld part") && values.includes("type")) return r;
+    }
+    return -1;
+  }
+
+  function normalizeKey(v) { return String(v ?? "").trim().replace(/\s+/g," ").toLowerCase(); }
+  function normalizeSpaces(v) { return String(v ?? "").trim().replace(/\s+/g," "); }
+
+  function findHeaderIndex(headers, candidates) {
+    const keys = headers.map(normalizeKey);
+    for (const c of candidates) {
+      const idx = keys.indexOf(normalizeKey(c));
+      if (idx >= 0) return idx;
+    }
+    return -1;
+  }
+
+  function cellValue(row, idx) {
+    if (idx < 0) return "";
+    const v = row[idx];
+    return v === null || v === undefined ? "" : v;
+  }
+
+  function isBlank(v) {
+    return v === null || v === undefined || String(v).trim() === "";
+  }
+
+  function headerToMonth(header) {
+    // XLSB/XLSX timeline headers can arrive as Excel serial numbers
+    // (example: 46204 = 01-Jul-2026). Convert those first.
+    if (typeof header === "number" && Number.isFinite(header)) {
+      const serial = Math.floor(header);
+      // Restrict to a practical Excel-date range so ordinary numeric
+      // column names are not accidentally treated as dates.
+      if (serial >= 1 && serial <= 100000) {
+        const excelEpoch = Date.UTC(1899, 11, 30);
+        const d = new Date(excelEpoch + serial * 86400000);
+        const y = d.getUTCFullYear();
+        const m = d.getUTCMonth() + 1;
+        if (y >= 1900 && y <= 2200) {
+          return String(y) + String(m).padStart(2, "0");
+        }
+      }
+    }
+
+    if (header instanceof Date && !Number.isNaN(header.getTime())) {
+      return String(header.getFullYear()) + String(header.getMonth() + 1).padStart(2, "0");
+    }
+
+    const s = String(header ?? "").trim();
+    if (!s) return null;
+
+    // Excel serial stored as text, e.g. "46204".
+    if (/^\d+(?:\.\d+)?$/.test(s)) {
+      const serial = Math.floor(Number(s));
+      if (serial >= 1 && serial <= 100000) {
+        const excelEpoch = Date.UTC(1899, 11, 30);
+        const d = new Date(excelEpoch + serial * 86400000);
+        const y = d.getUTCFullYear();
+        const mm = d.getUTCMonth() + 1;
+        if (y >= 1900 && y <= 2200) {
+          return String(y) + String(mm).padStart(2, "0");
+        }
+      }
+    }
+
+    let m = s.match(/^(\d{4})(0[1-9]|1[0-2])$/);
+    if (m) return m[1] + m[2];
+
+    m = s.match(/^(\d{4})[-\/](\d{1,2})(?:[-\/]\d{1,2})?$/);
+    if (m) return m[1] + String(Number(m[2])).padStart(2,"0");
+
+    m = s.match(/^(\d{1,2})[-\/\s]([A-Za-z]{3,9})[-\/\s](\d{2,4})$/);
+    if (m) {
+      const months = {jan:1,january:1,feb:2,february:2,mar:3,march:3,apr:4,april:4,may:5,jun:6,june:6,jul:7,july:7,aug:8,august:8,sep:9,september:9,oct:10,october:10,nov:11,november:11,dec:12,december:12};
+      const mm = months[m[2].toLowerCase()];
+      if (!mm) return null;
+      let yy = Number(m[3]);
+      if (yy < 100) yy += yy >= 70 ? 1900 : 2000;
+      return String(yy) + String(mm).padStart(2,"0");
+    }
+
+    m = s.match(/^(\d{1,2})[-\/](\d{1,2})[-\/](\d{2,4})$/);
+    if (m) {
+      let yy = Number(m[3]);
+      if (yy < 100) yy += yy >= 70 ? 1900 : 2000;
+      const mm = Number(m[2]);
+      if (mm >= 1 && mm <= 12) return String(yy) + String(mm).padStart(2,"0");
+    }
+    return null;
+  }
+
+  function parseNumber(v) {
+    if (v === null || v === undefined || v === "") return 0;
+    if (typeof v === "number") return Number.isFinite(v) ? v : 0;
+    let s = String(v).trim();
+    if (!s) return 0;
+    let neg = false;
+    if (/^\(.*\)$/.test(s)) { neg = true; s = s.slice(1,-1); }
+    s = s.replace(/,/g,"").replace(/\s/g,"");
+    const n = Number(s);
+    if (!Number.isFinite(n)) return 0;
+    return neg ? -n : n;
+  }
+
+  function normalizeNumber(n) {
+    if (Math.abs(n) < 1e-12) return 0;
+    return Number.isInteger(n) ? n : Number(n.toFixed(8));
+  }
+
+  function continuousMonths(start, end) {
+    let y = Number(start.slice(0,4)), m = Number(start.slice(4,6));
+    const ey = Number(end.slice(0,4)), em = Number(end.slice(4,6));
+    const out = [];
+    while (y < ey || (y === ey && m <= em)) {
+      out.push(String(y) + String(m).padStart(2,"0"));
+      m++; if (m === 13) { m = 1; y++; }
+    }
+    return out;
+  }
+
+  function renderSummary(headerRowIndex, timeline, parts, months, outputRows) {
+    summary.innerHTML = `
+      <div class="chip"><b>${parts.toLocaleString()}</b> LD Parts</div>
+      <div class="chip"><b>${timeline.length}</b> source date columns</div>
+      <div class="chip"><b>${months}</b> monthly columns</div>
+      <div class="chip"><b>${outputRows.toLocaleString()}</b> output rows</div>
+      <div class="chip">Header row: <b>${headerRowIndex + 1}</b></div>
+      <div class="chip">Mode: <b>${includeShortage.checked ? "Preview Demand + Planned Order + Supply + Gap | 1 Excel export: Planned Order + Supply" : "Combined Only"}</b></div>
+    `;
+  }
+
+  function renderPreview() {
+    const thead = document.querySelector("#previewTable thead");
+    const tbody = document.querySelector("#previewTable tbody");
+    thead.innerHTML = "";
+    tbody.innerHTML = "";
+    if (!resultHeaders.length) return;
+
+    const trh = document.createElement("tr");
+    resultHeaders.forEach(h => {
+      const th = document.createElement("th");
+      th.textContent = h;
+      trh.appendChild(th);
+    });
+    thead.appendChild(trh);
+
+    const q = searchBox.value.trim().toLowerCase();
+    const rows = resultRows.filter(r => {
+      const searchablePart = String(r["LD Part"] || r["__partSearch"] || "").toLowerCase();
+      return !q || searchablePart.includes(q);
+    }).slice(0,400);
+
+    for (const row of rows) {
+      const tr = document.createElement("tr");
+      if (row.__rowClass) tr.className = row.__rowClass;
+      resultHeaders.forEach(h => {
+        const td = document.createElement("td");
+        const value = row[h] ?? "";
+        td.textContent = value;
+
+        if (
+          row["Type"] === "Gap" &&
+          /^\d{6}$/.test(h) &&
+          typeof value === "number" &&
+          value < 0
+        ) {
+          td.classList.add("gap-negative");
+        }
+
+        tr.appendChild(td);
+      });
+      tbody.appendChild(tr);
+    }
+  }
+
+  function getCombinedExportRows() {
+    return resultRows.filter(row => row["Type"] === SHORTAGE_TYPE || row["Type"] === TYPE_SUPPLY);
+  }
+
+  function buildExportRecord(row, monthHeaders) {
+    const meta = row.__meta || {};
+    const record = {
+      "LD Part": row["LD Part"] ?? "",
+      "Stock-0007": row.__stockExport ?? row["Stock-0007"] ?? "",
+      "Correct PG": meta["Correct PG"] ?? "",
+      "MM PG": meta["MM PG"] ?? "",
+      "MPN": meta["MPN"] ?? "",
+      "MFG": meta["MFG"] ?? "",
+      "MFG Name": meta["MFG Name"] ?? "",
+      "FFFC": meta["FFFC"] ?? "",
+      "Prefer Vendor": meta["Prefer Vendor"] ?? "",
+      "Vendor Name": meta["Vendor Name"] ?? "",
+      "PDT in PIR": meta["PDT in PIR"] ?? "",
+      "ROP": meta["ROP"] ?? "",
+      // Export as a fixed VALUE only (no Excel formula).
+      "ROP demand after stock": normalizeNumber(
+        parseNumber(row.__stockExport ?? row["Stock-0007"] ?? 0) - parseNumber(meta["ROP"] ?? 0)
+      ),
+      "Type": row["Type"] ?? ""
+    };
+    for (const m of monthHeaders) record[m] = row[m] ?? 0;
+    return record;
+  }
+
+  function downloadCombinedXLSX() {
+    if (typeof XLSX === "undefined") {
+      alert("Excel export requires SheetJS. Please connect to the internet and reload this HTML.");
+      return;
+    }
+
+    const exportRows = getCombinedExportRows();
+    const hasPlanned = exportRows.some(r => r["Type"] === SHORTAGE_TYPE);
+    const hasSupply = exportRows.some(r => r["Type"] === TYPE_SUPPLY);
+    if (!hasPlanned || !hasSupply) {
+      alert("Export requires both Planned Order and 02 Supply rows. Please enable Create Planned Order row and process the file again.");
+      return;
+    }
+
+    const monthHeaders = resultHeaders.filter(h => /^\d{6}$/.test(h));
+    const exportHeaders = [...EXPORT_MASTER_HEADERS, ...monthHeaders];
+    const records = exportRows.map(r => buildExportRecord(r, monthHeaders));
+    const aoa = [exportHeaders, ...records.map(r => exportHeaders.map(h => r[h]))];
+    const ws = XLSX.utils.aoa_to_sheet(aoa);
+
+    // ROP demand after stock is already calculated in buildExportRecord().
+    // Keep it as a fixed numeric VALUE in the exported Excel file (no formula).
+
+    // Column order/width mirrors Output_Monthly_yyyymmdd.xlsx.
+    ws["!cols"] = exportHeaders.map((h, i) => {
+      if (h === "LD Part") return {wch:20};
+      if (h === "Stock-0007") return {wch:13};
+      if (h === "Correct PG" || h === "MM PG") return {wch:12};
+      if (h === "MPN") return {wch:22};
+      if (h === "MFG") return {wch:14};
+      if (h === "MFG Name") return {wch:28};
+      if (h === "FFFC") return {wch:20};
+      if (h === "Prefer Vendor") return {wch:15};
+      if (h === "Vendor Name") return {wch:42};
+      if (h === "PDT in PIR") return {wch:12};
+      if (h === "ROP") return {wch:10};
+      if (h === "ROP demand after stock") return {wch:23};
+      if (h === "Type") return {wch:18};
+      return {wch:11};
+    });
+
+    // Keep the header visible in Excel and make review easier.
+    ws["!autofilter"] = {ref: XLSX.utils.encode_range({s:{r:0,c:0}, e:{r:records.length,c:exportHeaders.length-1}})};
+    ws["!freeze"] = {xSplit: 0, ySplit: 1, topLeftCell: "A2", activePane: "bottomLeft", state: "frozen"};
+
+    const wb = XLSX.utils.book_new();
+    wb.Workbook = wb.Workbook || {};
+    wb.Workbook.CalcPr = {calcMode:"auto", fullCalcOnLoad:"1", forceFullCalc:"1"};
+    XLSX.utils.book_append_sheet(wb, ws, "Sheet1");
+    XLSX.writeFile(wb, `Output_Monthly_${todayYYYYMMDD()}.xlsx`);
+  }
+
+  function todayYYYYMMDD() {
+    const d = new Date();
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return `${y}${m}${day}`;
+  }
+
+  function parseCSV(text) {
+    text = text.replace(/^\uFEFF/, "");
+    const rows = [];
+    let row = [], field = "", inQuotes = false;
+    for (let i = 0; i < text.length; i++) {
+      const c = text[i];
+      if (inQuotes) {
+        if (c === '"') {
+          if (text[i+1] === '"') { field += '"'; i++; }
+          else inQuotes = false;
+        } else field += c;
+      } else {
+        if (c === '"') inQuotes = true;
+        else if (c === ",") { row.push(field); field = ""; }
+        else if (c === "\n") { row.push(field.replace(/\r$/,"")); rows.push(row); row = []; field = ""; }
+        else field += c;
+      }
+    }
+    if (field.length || row.length) { row.push(field.replace(/\r$/,"")); rows.push(row); }
+    return rows;
+  }
+})();
+</script>
+</body>
+</html>
