@@ -59,11 +59,99 @@
 
   .control-row{
     display:grid;
-    grid-template-columns:minmax(430px,480px) 95px 2px 230px;
+    grid-template-columns:175px 55px minmax(430px,480px) 95px 2px 230px;
     align-items:center;
     justify-content:center;
-    column-gap:28px;
-    min-height:160px;
+    column-gap:22px;
+    min-height:180px;
+  }
+
+  .sharepoint-link{
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    gap:8px;
+    color:#111827;
+    text-decoration:none;
+    text-align:center;
+    border-radius:14px;
+    padding:8px 6px;
+    transition:transform .18s ease, background .18s ease, box-shadow .18s ease;
+  }
+
+  .sharepoint-link:hover{
+    transform:translateY(-2px);
+    background:#f7fbfb;
+    box-shadow:0 6px 16px rgba(0,105,92,.10);
+  }
+
+  .sharepoint-link:focus-visible{
+    outline:2px solid #00a67a;
+    outline-offset:4px;
+  }
+
+  .sharepoint-logo{
+    width:108px;
+    height:108px;
+    position:relative;
+    display:block;
+  }
+
+  .sp-bubble{
+    position:absolute;
+    border-radius:50%;
+  }
+
+  .sp-bubble.b1{width:74px;height:74px;left:22px;top:2px;background:#087b7b;}
+  .sp-bubble.b2{width:72px;height:72px;left:43px;top:36px;background:#159c9d;}
+  .sp-bubble.b3{width:58px;height:58px;left:29px;top:55px;background:#35b9c4;}
+
+  .sp-tile-shadow{
+    position:absolute;
+    width:61px;
+    height:70px;
+    left:3px;
+    top:35px;
+    border-radius:7px;
+    background:rgba(0,70,73,.36);
+    transform:translate(5px,3px);
+  }
+
+  .sp-tile{
+    position:absolute;
+    width:61px;
+    height:70px;
+    left:0;
+    top:32px;
+    border-radius:7px;
+    background:#07858a;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    color:#fff;
+    font-size:48px;
+    line-height:1;
+    font-weight:600;
+    box-shadow:0 1px 2px rgba(0,0,0,.12);
+  }
+
+  .sharepoint-label{
+    font-size:16px;
+    line-height:1.25;
+    font-weight:500;
+    white-space:nowrap;
+  }
+
+  .source-arrow{
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    color:#00a36c;
+    font-size:34px;
+    font-weight:300;
+    line-height:1;
+    user-select:none;
   }
 
   .drop{
@@ -160,12 +248,7 @@
   }
 
   .status{
-    margin:14px auto 0;
-    max-width:860px;
-    min-height:20px;
-    text-align:center;
-    color:var(--muted);
-    font-size:13px;
+    display:none !important;
   }
 
   .status.ok{color:#2e7d32}
@@ -300,6 +383,9 @@
       gap:18px;
       min-height:auto;
     }
+    .sharepoint-logo{width:92px;height:92px;transform:scale(.88)}
+    .sharepoint-label{font-size:15px}
+    .source-arrow{transform:rotate(90deg);font-size:32px}
     .drop{min-height:135px}
     .arrow{transform:rotate(90deg);font-size:44px}
     .divider{display:none}
@@ -318,6 +404,19 @@
   <main class="page">
     <div class="content">
       <section class="control-row">
+        <a class="sharepoint-link" href="https://xppower.sharepoint.com/sites/ProcurementGroup/Shared%20Documents/Forms/AllItems.aspx?id=%2Fsites%2FProcurementGroup%2FShared%20Documents%2FGeneral%2FSupply%20Chain%20Management%20Purchasing%20Alan%20Low%2FPurchasing%5FVNS1%2FVN%5FPurchasing%2F06%2E%20MO%20pull%20in%2FBI%20Shortage%20report%2D2026&amp;sortField=LinkFilename&amp;isAscending=true&amp;viewid=fadad479%2D7440%2D43a3%2Db125%2D2e81f8611e4d&amp;sharingv2=true&amp;fromShare=true&amp;at=9&amp;CID=3fe5a27b%2D4450%2D49b9%2D9aa4%2Da2977a6511d5&amp;FolderCTID=0x0120008CD626B0B0B95241A38F050DB582697E" target="_blank" rel="noopener noreferrer" title="Open BI Shortage report in SharePoint">
+          <span class="sharepoint-logo" aria-hidden="true">
+            <span class="sp-bubble b1"></span>
+            <span class="sp-bubble b2"></span>
+            <span class="sp-bubble b3"></span>
+            <span class="sp-tile-shadow"></span>
+            <span class="sp-tile">S</span>
+          </span>
+          <span class="sharepoint-label">BI Shortage report</span>
+        </a>
+
+        <div class="source-arrow" aria-hidden="true">→</div>
+
         <label class="drop" id="dropZone">
           <input id="fileInput" type="file" accept=".csv,.xlsx,.xlsb,.xls,.xlsm" />
           <div>
@@ -369,7 +468,7 @@
   const COMBINED_TYPE = "01 Demand+01 Demand FCST-XYS";
   const SHORTAGE_TYPE = "Planned Order";
   const EXPORT_MASTER_HEADERS = [
-    "LD Part", "Stock-0007", "Correct PG", "MM PG",
+    "LD Part", "Stock-0007", "Correct PG", "1st Shortage Date_DT",
     "MPN", "MFG", "MFG Name",
     "FFFC", "Prefer Vendor", "Vendor Name", "PDT in PIR",
     "ROP", "ROP demand after stock", "Type"
@@ -491,7 +590,7 @@
       const idxStock = findHeaderIndex(headers, ["Stock-0007","Stock 0007","Stock"]);
       const idxType = findHeaderIndex(headers, ["Type"]);
       const idxCorrectPG = findHeaderIndex(headers, ["Correct PG","CorrectPG"]);
-      const idxMMPG = findHeaderIndex(headers, ["MM PG","MMPG"]);
+      const idxFirstShortageDate = findHeaderIndex(headers, ["1st Shortage Date_DT","1st Shortage Date DT","1st Shortage Date"]);
       const idxMPN = findHeaderIndex(headers, ["MPN","Manufacturer Part Number","Mfr Part Number","Mfr. Part No.","Part Number"]);
       const idxMFG = findHeaderIndex(headers, ["MFG","Manufacturer","Mfr","MFG Code","Manufacturer Code"]);
       const idxMFGName = findHeaderIndex(headers, ["MFG Name","Manufacturer Name","Mfr Name","MFGName"]);
@@ -527,7 +626,7 @@
             stock: parseNumber(row[idxStock]),
             meta: {
               "Correct PG": cellValue(row, idxCorrectPG),
-              "MM PG": cellValue(row, idxMMPG),
+              "1st Shortage Date_DT": cellValue(row, idxFirstShortageDate),
               "MPN": cellValue(row, idxMPN),
               "MFG": cellValue(row, idxMFG),
               "MFG Name": cellValue(row, idxMFGName),
@@ -550,7 +649,7 @@
 
         // Fill requested export master-data fields from the first non-blank value found for each LD Part.
         const metaSources = [
-          ["Correct PG", idxCorrectPG], ["MM PG", idxMMPG],
+          ["Correct PG", idxCorrectPG], ["1st Shortage Date_DT", idxFirstShortageDate],
           ["MPN", idxMPN], ["MFG", idxMFG], ["MFG Name", idxMFGName],
           ["FFFC", idxFFFC],
           ["Prefer Vendor", idxPreferVendor], ["Vendor Name", idxVendorName], ["PDT in PIR", idxPDT],
@@ -656,7 +755,7 @@
       const hasPlanned = resultRows.some(r => r["Type"] === SHORTAGE_TYPE);
       const hasSupply = resultRows.some(r => r["Type"] === TYPE_SUPPLY);
       downloadExcelBtn.disabled = !(hasPlanned && hasSupply);
-      setStatus(`Done. ${items.length.toLocaleString()} LD Parts processed. ${includeShortage.checked ? "Download Excel is ready: Planned Order + 02 Supply, with LD Part / Stock / PG / MPN / MFG / MFG Name / FFFC / vendor / PDT / ROP / ROP demand after stock columns and monthly YYYYMM columns. ROP demand after stock is exported as value only." : "Enable Create Planned Order row to use the combined Excel export."}`, "ok");
+      setStatus(`Done. ${items.length.toLocaleString()} LD Parts processed. ${includeShortage.checked ? "Download Excel is ready: Planned Order + 02 Supply, with LD Part / Stock / PG / 1st Shortage Date_DT / MPN / MFG / MFG Name / FFFC / vendor / PDT / ROP / ROP demand after stock columns and monthly YYYYMM columns. ROP demand after stock is exported as value only." : "Enable Create Planned Order row to use the combined Excel export."}`, "ok");
     } catch (err) {
       console.error(err);
       setStatus(err.message || String(err), "err");
@@ -696,6 +795,16 @@
 
   function isBlank(v) {
     return v === null || v === undefined || String(v).trim() === "";
+  }
+
+  // Vendor Name export: remove a leading numeric vendor code only.
+  // Example: "0001011192 Wang Tak Metal Manufactory Limited"
+  //       -> "Wang Tak Metal Manufactory Limited"
+  // Names such as "3M Company" are kept unchanged.
+  function cleanVendorName(value) {
+    const s = String(value ?? "").trim();
+    if (!s) return "";
+    return s.replace(/^\d+(?:\s+|[-–—:|]\s*)/, "").trim();
   }
 
   function headerToMonth(header) {
@@ -857,13 +966,13 @@
       "LD Part": row["LD Part"] ?? "",
       "Stock-0007": row.__stockExport ?? row["Stock-0007"] ?? "",
       "Correct PG": meta["Correct PG"] ?? "",
-      "MM PG": meta["MM PG"] ?? "",
+      "1st Shortage Date_DT": meta["1st Shortage Date_DT"] ?? "",
       "MPN": meta["MPN"] ?? "",
       "MFG": meta["MFG"] ?? "",
       "MFG Name": meta["MFG Name"] ?? "",
       "FFFC": meta["FFFC"] ?? "",
       "Prefer Vendor": meta["Prefer Vendor"] ?? "",
-      "Vendor Name": meta["Vendor Name"] ?? "",
+      "Vendor Name": cleanVendorName(meta["Vendor Name"]),
       "PDT in PIR": meta["PDT in PIR"] ?? "",
       "ROP": meta["ROP"] ?? "",
       // Export as a fixed VALUE only (no Excel formula).
@@ -896,6 +1005,28 @@
     const aoa = [exportHeaders, ...records.map(r => exportHeaders.map(h => r[h]))];
     const ws = XLSX.utils.aoa_to_sheet(aoa);
 
+    // Force 1st Shortage Date_DT to display as an Excel date: dd-mmm-yy.
+    // The source is normally an Excel serial number because the workbook is read with raw:true.
+    // If a Date object is ever supplied, convert it to an Excel serial before writing.
+    const firstShortageCol = exportHeaders.indexOf("1st Shortage Date_DT");
+    if (firstShortageCol >= 0) {
+      for (let r = 1; r <= records.length; r++) {
+        const addr = XLSX.utils.encode_cell({r, c:firstShortageCol});
+        const cell = ws[addr];
+        if (!cell || cell.v === "" || cell.v === null || cell.v === undefined) continue;
+
+        if (cell.v instanceof Date && !Number.isNaN(cell.v.getTime())) {
+          const excelEpoch = Date.UTC(1899, 11, 30);
+          const utcDate = Date.UTC(cell.v.getFullYear(), cell.v.getMonth(), cell.v.getDate());
+          cell.v = (utcDate - excelEpoch) / 86400000;
+          cell.t = "n";
+        }
+
+        // Excel number format, example: 21-Dec-26
+        cell.z = "dd-mmm-yy";
+      }
+    }
+
     // ROP demand after stock is already calculated in buildExportRecord().
     // Keep it as a fixed numeric VALUE in the exported Excel file (no formula).
 
@@ -903,7 +1034,8 @@
     ws["!cols"] = exportHeaders.map((h, i) => {
       if (h === "LD Part") return {wch:20};
       if (h === "Stock-0007") return {wch:13};
-      if (h === "Correct PG" || h === "MM PG") return {wch:12};
+      if (h === "Correct PG") return {wch:12};
+      if (h === "1st Shortage Date_DT") return {wch:20};
       if (h === "MPN") return {wch:22};
       if (h === "MFG") return {wch:14};
       if (h === "MFG Name") return {wch:28};
