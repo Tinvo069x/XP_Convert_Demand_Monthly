@@ -4,7 +4,7 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Convert Demand Monthly</title>
-<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js" onerror="this.onerror=null;this.src='https://unpkg.com/xlsx@0.18.5/dist/xlsx.full.min.js'"></script>
 
 <style>
   :root{
@@ -248,7 +248,16 @@
   }
 
   .status{
-    display:none !important;
+    display:block;
+    max-width:1365px;
+    margin:0 auto 14px;
+    padding:10px 12px;
+    border:1px solid #d9e2e2;
+    border-radius:6px;
+    background:#f8fbfb;
+    color:#475467;
+    font-size:13px;
+    line-height:1.45;
   }
 
   .status.ok{color:#2e7d32}
@@ -259,7 +268,20 @@
   }
 
   .summary{
-    display:none;
+    display:flex;
+    flex-wrap:wrap;
+    gap:8px;
+    max-width:1365px;
+    margin:0 auto 14px;
+  }
+
+  .summary .chip{
+    padding:6px 9px;
+    border:1px solid #d9e2e2;
+    border-radius:999px;
+    background:#fff;
+    color:#475467;
+    font-size:12px;
   }
 
   .review{
@@ -486,6 +508,7 @@
 
   let sourceMatrix = null;
   let sourceName = "Monthly_Demand_FCST";
+  let sourceSheetName = "";
   let resultRows = [];
   let resultHeaders = [];
 
@@ -535,6 +558,7 @@
       if (ext === "csv") {
         const text = await file.text();
         matrix = parseCSV(text);
+        sourceSheetName = "CSV";
       } else {
         if (typeof XLSX === "undefined") {
           throw new Error("Excel reader could not load. Please connect to the internet, reload this HTML, or use CSV.");
@@ -556,13 +580,35 @@
           throw new Error("No worksheet was found in the Excel file.");
         }
 
-        const ws = wb.Sheets[wb.SheetNames[0]];
-        matrix = XLSX.utils.sheet_to_json(ws, {
-          header: 1,
-          defval: "",
-          raw: true,
-          blankrows: true
-        });
+        // Do not assume the first worksheet contains the shortage data.
+        // Scan every sheet and pick the first one containing the required
+        // LD Part + Type header row. This avoids false errors when the
+        // workbook opens on a cover/summary sheet.
+        let selected = null;
+        for (const sheetName of wb.SheetNames) {
+          const ws = wb.Sheets[sheetName];
+          const candidate = XLSX.utils.sheet_to_json(ws, {
+            header: 1,
+            defval: "",
+            raw: true,
+            blankrows: true
+          });
+
+          const candidateHeader = findHeaderRow(candidate);
+          if (candidateHeader >= 0) {
+            selected = { sheetName, matrix: candidate };
+            break;
+          }
+        }
+
+        if (!selected) {
+          throw new Error(
+            `Could not find a data sheet containing "LD Part" and "Type". Checked: ${wb.SheetNames.join(", ")}`
+          );
+        }
+
+        sourceSheetName = selected.sheetName;
+        matrix = selected.matrix;
       }
 
       sourceMatrix = matrix;
@@ -586,9 +632,9 @@
 
       const rawHeaders = matrix[headerRowIndex] || [];
       const headers = rawHeaders.map(v => String(v ?? "").trim());
-      const idxPart = findHeaderIndex(headers, ["LD Part","LDPart","Material"]);
-      const idxStock = findHeaderIndex(headers, ["Stock-0007","Stock 0007","Stock"]);
-      const idxType = findHeaderIndex(headers, ["Type"]);
+      const idxPart = findHeaderIndex(headers, ["LD Part","LDPart","LD_Part","LD-Part","Material","Material Number","Material No"]);
+      const idxStock = findHeaderIndex(headers, ["Stock-0007","Stock 0007","Stock_0007","Stock 0007 Qty","Stock","Opening Stock"]);
+      const idxType = findHeaderIndex(headers, ["Type","Data Type","Record Type","Demand Supply Type","Demand/Supply Type"]);
       const idxCorrectPG = findHeaderIndex(headers, ["Correct PG","CorrectPG"]);
       const idxFirstShortageDate = findHeaderIndex(headers, ["1st Shortage Date_DT","1st Shortage Date DT","1st Shortage Date"]);
       const idxMPN = findHeaderIndex(headers, ["MPN","Manufacturer Part Number","Mfr Part Number","Mfr. Part No.","Part Number"]);
@@ -612,13 +658,21 @@
       if (!timeline.length) throw new Error("No timeline date columns were detected.");
 
       const grouped = new Map();
+      const rawTypesSeen = new Set();
+      const typeCounts = { demand:0, fcst:0, supply:0 };
 
       for (let r = headerRowIndex + 1; r < matrix.length; r++) {
         const row = matrix[r] || [];
         const part = String(row[idxPart] ?? "").trim();
-        const type = normalizeSpaces(row[idxType]);
+        const rawType = normalizeSpaces(row[idxType]);
+        if (rawType) rawTypesSeen.add(rawType);
+        const type = canonicalType(rawType);
         if (!part) continue;
         if (type !== TYPE_DEMAND && type !== TYPE_FCST && type !== TYPE_SUPPLY) continue;
+
+        if (type === TYPE_DEMAND) typeCounts.demand++;
+        else if (type === TYPE_FCST) typeCounts.fcst++;
+        else if (type === TYPE_SUPPLY) typeCounts.supply++;
 
         if (!grouped.has(part)) {
           grouped.set(part, {
@@ -637,6 +691,8 @@
               "ROP": cellValue(row, idxROP)
             },
             demandMonths: {},
+            fcstMonths: {},
+            demandPresent: {},
             supplyMonths: {}
           });
         }
@@ -666,10 +722,21 @@
           const val = parseNumber(row[t.index]);
           if (type === TYPE_SUPPLY) {
             item.supplyMonths[t.month] = (item.supplyMonths[t.month] || 0) + val;
-          } else {
+          } else if (type === TYPE_DEMAND) {
             item.demandMonths[t.month] = (item.demandMonths[t.month] || 0) + val;
+            item.demandPresent[t.month] = true;
+          } else if (type === TYPE_FCST) {
+            item.fcstMonths[t.month] = (item.fcstMonths[t.month] || 0) + val;
           }
         }
+      }
+
+      if (!grouped.size) {
+        const sampleTypes = [...rawTypesSeen].slice(0, 12).join(", ");
+        throw new Error(
+          `No usable Demand/Supply rows were recognized. Expected Type values like "01 Demand", "01 Demand FCST-XYS", and "02 Supply".` +
+          (sampleTypes ? ` Detected Type values: ${sampleTypes}` : "")
+        );
       }
 
       let monthList = [...new Set(timeline.map(x => x.month))].sort();
@@ -681,6 +748,20 @@
       resultHeaders = ["LD Part","Stock-0007","Type", ...monthList];
       resultRows = [];
 
+      // Display rule for the main preview row:
+      // show Demand first; use FCST only when that month has no Demand.
+      function displayDemand(item, month) {
+        return normalizeNumber(item.demandPresent[month]
+          ? (item.demandMonths[month] || 0)
+          : (item.fcstMonths[month] || 0));
+      }
+
+      // Planning rule for Planned Order / Gap:
+      // use total requirement = Demand + FCST in the same month.
+      function planningDemand(item, month) {
+        return normalizeNumber((item.demandMonths[month] || 0) + (item.fcstMonths[month] || 0));
+      }
+
       for (const item of items) {
         const mainRow = {
           "LD Part": item.part,
@@ -688,11 +769,17 @@
           "Type": COMBINED_TYPE,
           "__rowClass": ""
         };
-        for (const m of monthList) mainRow[m] = normalizeNumber(item.demandMonths[m] || 0);
+        for (const m of monthList) mainRow[m] = displayDemand(item, m);
         resultRows.push(mainRow);
 
         if (includeShortage.checked) {
-          let availableStock = Math.max(0, normalizeNumber(item.stock));
+          // Planned Order rule:
+          // 1) Before the first shortage month -> 0.
+          // 2) First shortage month -> ABS(running Gap), where Gap still uses Supply.
+          // 3) After shortage starts -> Planned Order equals that month's displayed demand,
+          //    and future Supply is ignored for Planned Order.
+          let plannedGap = normalizeNumber(item.stock);
+          let shortageStarted = false;
           const plannedRow = {
             "LD Part": item.part,
             "Stock-0007": "",
@@ -703,15 +790,24 @@
           };
 
           for (const m of monthList) {
-            const currentDemand = Math.max(0, normalizeNumber(item.demandMonths[m] || 0));
+            if (shortageStarted) {
+              // Once shortage has started, planned demand follows the monthly demand row directly.
+              plannedRow[m] = Math.max(0, displayDemand(item, m));
+              continue;
+            }
 
-            // Planned Order = current month demand that remaining Stock-0007 cannot cover.
-            // Example IN60000011133:
-            // 57,299 - 57,074 = 225 stock remaining
-            // 27,818 - 225 = 27,593 Planned Order
-            plannedRow[m] = normalizeNumber(Math.max(0, currentDemand - availableStock));
+            const currentDemand = planningDemand(item, m);
+            const currentSupply = normalizeNumber(item.supplyMonths[m] || 0);
 
-            availableStock = normalizeNumber(Math.max(0, availableStock - currentDemand));
+            // Supply is used only to locate the FIRST shortage month via running Gap.
+            plannedGap = normalizeNumber(plannedGap - currentDemand + currentSupply);
+
+            if (plannedGap < 0) {
+              plannedRow[m] = normalizeNumber(Math.abs(plannedGap));
+              shortageStarted = true;
+            } else {
+              plannedRow[m] = 0;
+            }
           }
           resultRows.push(plannedRow);
         }
@@ -742,7 +838,7 @@
         };
 
         for (const m of monthList) {
-          const currentDemand = normalizeNumber(item.demandMonths[m] || 0);
+          const currentDemand = planningDemand(item, m);
           const currentSupply = normalizeNumber(item.supplyMonths[m] || 0);
           runningGap = normalizeNumber(runningGap - currentDemand + currentSupply);
           gapRow[m] = runningGap;
@@ -750,12 +846,17 @@
         resultRows.push(gapRow);
       }
 
-      renderSummary(headerRowIndex, timeline, items.length, monthList.length, resultRows.length);
+      renderSummary(headerRowIndex, timeline, items.length, monthList.length, resultRows.length, typeCounts);
       renderPreview();
       const hasPlanned = resultRows.some(r => r["Type"] === SHORTAGE_TYPE);
       const hasSupply = resultRows.some(r => r["Type"] === TYPE_SUPPLY);
       downloadExcelBtn.disabled = !(hasPlanned && hasSupply);
-      setStatus(`Done. ${items.length.toLocaleString()} LD Parts processed. ${includeShortage.checked ? "Download Excel is ready: Planned Order + 02 Supply, with LD Part / Stock / PG / 1st Shortage Date_DT / MPN / MFG / MFG Name / FFFC / vendor / PDT / ROP / ROP demand after stock columns and monthly YYYYMM columns. ROP demand after stock is exported as value only." : "Enable Create Planned Order row to use the combined Excel export."}`, "ok");
+      setStatus(
+        `Done. ${items.length.toLocaleString()} LD Parts processed. ` +
+        `Recognized rows — Demand: ${typeCounts.demand.toLocaleString()}, FCST: ${typeCounts.fcst.toLocaleString()}, Supply: ${typeCounts.supply.toLocaleString()}. ` +
+        `Formula check: Gap = previous Gap - Demand/FCST + Supply. Planned Order is 0 before the first shortage, equals ABS(first negative Gap) in the first shortage month, then follows the monthly demand row afterward and ignores future Supply.`,
+        "ok"
+      );
     } catch (err) {
       console.error(err);
       setStatus(err.message || String(err), "err");
@@ -767,16 +868,51 @@
   }
 
   function findHeaderRow(matrix) {
-    const max = Math.min(matrix.length, 30);
+    // BI exports can contain title/filter rows above the real table.
+    // Scan deeper and accept common header-name variations.
+    const max = Math.min(matrix.length, 250);
     for (let r = 0; r < max; r++) {
-      const values = (matrix[r] || []).map(v => normalizeKey(v));
-      if (values.includes("ld part") && values.includes("type")) return r;
+      const row = matrix[r] || [];
+      const headers = row.map(v => String(v ?? "").trim());
+      const partIdx = findHeaderIndex(headers, [
+        "LD Part","LDPart","LD_Part","LD-Part",
+        "Material","Material Number","Material No"
+      ]);
+      const typeIdx = findHeaderIndex(headers, [
+        "Type","Data Type","Record Type",
+        "Demand Supply Type","Demand/Supply Type"
+      ]);
+      if (partIdx >= 0 && typeIdx >= 0) return r;
     }
     return -1;
   }
 
-  function normalizeKey(v) { return String(v ?? "").trim().replace(/\s+/g," ").toLowerCase(); }
-  function normalizeSpaces(v) { return String(v ?? "").trim().replace(/\s+/g," "); }
+  function normalizeKey(v) {
+    return String(v ?? "")
+      .normalize("NFKC")
+      .trim()
+      .replace(/[\u2010-\u2015\u2212]/g, "-")
+      .replace(/[_/]+/g, " ")
+      .replace(/\s+/g," ")
+      .toLowerCase();
+  }
+
+  function normalizeSpaces(v) {
+    return String(v ?? "")
+      .normalize("NFKC")
+      .trim()
+      .replace(/[\u2010-\u2015\u2212]/g, "-")
+      .replace(/\s+/g," ");
+  }
+
+  function canonicalType(v) {
+    const s = normalizeSpaces(v).toLowerCase();
+    if (!s) return "";
+    if (s.includes("01 demand fcst") && s.includes("xys")) return TYPE_FCST;
+    if (/^01\s*demand$/.test(s)) return TYPE_DEMAND;
+    if (/^02\s*supply$/.test(s) || s.startsWith("02 supply ")) return TYPE_SUPPLY;
+    return normalizeSpaces(v);
+  }
 
   function findHeaderIndex(headers, candidates) {
     const keys = headers.map(normalizeKey);
@@ -901,14 +1037,16 @@
     return out;
   }
 
-  function renderSummary(headerRowIndex, timeline, parts, months, outputRows) {
+  function renderSummary(headerRowIndex, timeline, parts, months, outputRows, typeCounts = {}) {
     summary.innerHTML = `
       <div class="chip"><b>${parts.toLocaleString()}</b> LD Parts</div>
+      <div class="chip">Demand rows: <b>${(typeCounts.demand || 0).toLocaleString()}</b></div>
+      <div class="chip">FCST rows: <b>${(typeCounts.fcst || 0).toLocaleString()}</b></div>
+      <div class="chip">Supply rows: <b>${(typeCounts.supply || 0).toLocaleString()}</b></div>
       <div class="chip"><b>${timeline.length}</b> source date columns</div>
       <div class="chip"><b>${months}</b> monthly columns</div>
       <div class="chip"><b>${outputRows.toLocaleString()}</b> output rows</div>
       <div class="chip">Header row: <b>${headerRowIndex + 1}</b></div>
-      <div class="chip">Mode: <b>${includeShortage.checked ? "Preview Demand + Planned Order + Supply + Gap | 1 Excel export: Planned Order + Supply" : "Combined Only"}</b></div>
     `;
   }
 
