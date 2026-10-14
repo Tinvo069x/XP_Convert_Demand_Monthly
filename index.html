@@ -748,16 +748,9 @@
       resultHeaders = ["LD Part","Stock-0007","Type", ...monthList];
       resultRows = [];
 
-      // Display rule for the main preview row:
-      // show Demand first; use FCST only when that month has no Demand.
-      function displayDemand(item, month) {
-        return normalizeNumber(item.demandPresent[month]
-          ? (item.demandMonths[month] || 0)
-          : (item.fcstMonths[month] || 0));
-      }
-
-      // Planning rule for Planned Order / Gap:
-      // use total requirement = Demand + FCST in the same month.
+      // Combined monthly requirement used by both the displayed
+      // "01 Demand+01 Demand FCST-XYS" row and Planned Order.
+      // IMPORTANT: this is always Demand + FCST for the same month.
       function planningDemand(item, month) {
         return normalizeNumber((item.demandMonths[month] || 0) + (item.fcstMonths[month] || 0));
       }
@@ -769,15 +762,19 @@
           "Type": COMBINED_TYPE,
           "__rowClass": ""
         };
-        for (const m of monthList) mainRow[m] = displayDemand(item, m);
+        // The combined row must be the true monthly SUM of Demand + FCST.
+        for (const m of monthList) mainRow[m] = planningDemand(item, m);
         resultRows.push(mainRow);
 
         if (includeShortage.checked) {
-          // Planned Order rule:
-          // 1) Before the first shortage month -> 0.
-          // 2) First shortage month -> ABS(running Gap), where Gap still uses Supply.
-          // 3) After shortage starts -> Planned Order equals that month's displayed demand,
-          //    and future Supply is ignored for Planned Order.
+          // Planned Order rule (Supply is NOT used here):
+          // 1) Start from Stock-0007 / Safety Stock.
+          // 2) Deduct the monthly combined requirement = Demand + FCST.
+          // 3) Before Safety Stock is exhausted -> Planned Order = 0.
+          // 4) First shortage month -> Planned Order = ABS(remaining Safety Stock).
+          // 5) After shortage starts -> Planned Order = that month's Demand + FCST.
+          //
+          // 02 Supply is kept completely separate and is used only by the Gap row below.
           let plannedGap = normalizeNumber(item.stock);
           let shortageStarted = false;
           const plannedRow = {
@@ -791,16 +788,17 @@
 
           for (const m of monthList) {
             if (shortageStarted) {
-              // Once shortage has started, planned demand follows the monthly demand row directly.
-              plannedRow[m] = Math.max(0, displayDemand(item, m));
+              // Once shortage has started, Planned Order follows the FULL combined
+              // monthly requirement (Demand + FCST). Supply remains ignored.
+              plannedRow[m] = Math.max(0, planningDemand(item, m));
               continue;
             }
 
             const currentDemand = planningDemand(item, m);
-            const currentSupply = normalizeNumber(item.supplyMonths[m] || 0);
 
-            // Supply is used only to locate the FIRST shortage month via running Gap.
-            plannedGap = normalizeNumber(plannedGap - currentDemand + currentSupply);
+            // Planned Order must NOT include 02 Supply.
+            // Remaining Safety Stock = previous remaining stock - (Demand + FCST).
+            plannedGap = normalizeNumber(plannedGap - currentDemand);
 
             if (plannedGap < 0) {
               plannedRow[m] = normalizeNumber(Math.abs(plannedGap));
@@ -854,7 +852,7 @@
       setStatus(
         `Done. ${items.length.toLocaleString()} LD Parts processed. ` +
         `Recognized rows — Demand: ${typeCounts.demand.toLocaleString()}, FCST: ${typeCounts.fcst.toLocaleString()}, Supply: ${typeCounts.supply.toLocaleString()}. ` +
-        `Formula check: Gap = previous Gap - Demand/FCST + Supply. Planned Order is 0 before the first shortage, equals ABS(first negative Gap) in the first shortage month, then follows the monthly demand row afterward and ignores future Supply.`,
+        `Formula check: Combined row = Demand + FCST. Planned Order = Safety Stock minus the combined requirement until the first shortage, then follows monthly Demand + FCST and never uses 02 Supply. Gap keeps the original logic: previous Gap - (Demand + FCST) + Supply.`,
         "ok"
       );
     } catch (err) {
